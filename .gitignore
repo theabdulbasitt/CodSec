@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+
+# per-target build artifacts
+targets/**/node_modules/
+
+# agent run output (regenerated each run)
+runs/
