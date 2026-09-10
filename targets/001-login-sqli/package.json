@@ -1,0 +1,13 @@
+{
+    "name": "target-001-login-sqli",
+    "version": "1.0.0",
+    "description": "Deliberately vulnerable login app (UNION/error-based SQL injection). Attack target only.",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "start": "node --experimental-sqlite server.js"
+    },
+    "dependencies": {
+        "express": "^4.21.2"
+    }
+}
