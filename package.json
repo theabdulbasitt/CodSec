@@ -1,5 +1,5 @@
 {
-    "name": "codsec-agent",
+    "name": "CodSec",
     "version": "0.1.0",
     "description": "Autonomous SQL-injection exploit agent that proves findings by capturing a flag. Black-box, local targets only.",
     "type": "module",
