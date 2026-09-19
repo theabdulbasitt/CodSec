@@ -14,9 +14,10 @@ export function assertAllowedUrl(rawUrl: string): URL {
         throw new Error(`Refusing request: unsupported protocol ${url.protocol}`);
     }
 
-    if (!ALLOWED_HOSTS.has(url.hostname)) {
+    const host = url.hostname.replace(/^\[|\]$/g, ''); // ipv6 hostname arrive bracketed
+    if (!ALLOWED_HOSTS.has(host)) {
         throw new Error(
-            `Refusing request to non-allow-listed host "${url.hostname}". ` +
+            `Refusing request to non-allow-listed host "${host}". ` +
             `CodSec only attacks local targets (${[...ALLOWED_HOSTS].join(', ')}).`,
         );
     }

@@ -5,7 +5,8 @@
     "type": "module",
     "scripts": {
         "agent": "tsx agent/index.ts",
-        "validate": "tsx agent/validate-demo.ts"
+        "validate": "tsx agent/validate-demo.ts",
+        "test": "tsx --test agent/tests/*.test.ts"
     },
     "license": "ISC",
     "dependencies": {

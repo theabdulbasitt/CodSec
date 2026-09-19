@@ -42,16 +42,8 @@ export const toolSchemas: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 export function makeHandlers(memory: Memory): Record<string, (args: any) => Promise<string>> {
     return {
         discover: async (args) => {
-            const path = args?.path ?? '/';
-            const d = await discover(path);
-
-            // Deduplicate by full form structure (action + method + inputs)
-            for (const f of d.forms) {
-                const formSignature = JSON.stringify(f);
-                const exists = memory.forms.some((existing) => JSON.stringify(existing) === formSignature);
-                if (!exists) memory.forms.push(f);
-            }
-
+            const d = await discover(args?.path ?? '/');
+            memory.addForms(d.forms);
             return JSON.stringify({ forms: d.forms, links: d.links });
         },
 
