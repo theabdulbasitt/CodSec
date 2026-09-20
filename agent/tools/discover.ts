@@ -13,12 +13,8 @@ export interface Discovery {
     links: string[];
 }
 
-// Minimal HTML scraping via regex — fine for our controlled targets. A real
-// crawler would use a parser (cheerio); we keep deps at zero on purpose.
-export async function discover(path: string): Promise<Discovery> {
-    const res = await httpRequest({ path });
-    const html = res.body;
-
+// Pure HTML parser — no network, so it can be unit-tested with fixtures.
+export function parsePage(html: string, path: string): { forms: DiscoveredForm[]; links: string[] } {
     const forms: DiscoveredForm[] = [];
     const formRe = /<form\b([^>]*)>([\s\S]*?)<\/form>/gi;
     let m: RegExpExecArray | null;
@@ -39,5 +35,11 @@ export async function discover(path: string): Promise<Discovery> {
     let lm: RegExpExecArray | null;
     while ((lm = linkRe.exec(html))) links.push(lm[1]);
 
-    return { path, status: res.status, forms, links: [...new Set(links)] };
+    return { forms, links: [...new Set(links)] };
+}
+
+export async function discover(path: string): Promise<Discovery> {
+    const res = await httpRequest({ path });
+    const { forms, links } = parsePage(res.body, path);
+    return { path, status: res.status, forms, links };
 }
