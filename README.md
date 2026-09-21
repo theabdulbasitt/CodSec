@@ -21,7 +21,7 @@ confidently invent one that isn't there. A security tool that cries wolf gets tu
 So CodSec is built as two parts that don't trust each other:
 
 - **The hunter** — an LLM-driven agent that explores the app (black-box, HTTP only, no source
-  access) and proposes where an injection might be.
+  access) and  where an injection might be.
 - **The validator** — deterministic code that ignores the hunter's opinion and re-tests every
   claim itself. It only accepts a finding if it can make the app behave in a way that's
   *only* possible if the bug is real.
