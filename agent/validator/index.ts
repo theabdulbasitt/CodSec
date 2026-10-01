@@ -21,5 +21,13 @@ export async function validate(finding: Finding): Promise<ValidationResult> {
             : verdict === 'SUSPECTED' ? `Injectable-looking but no oracle confirmed — needs human review.`
                 : `No injection effect reproduced — treated as false positive.`;
 
-    return { finding, verdict, techniques, severity, evidence, llm: null, agreement: 'n/a', note };
+    // reason feeds the confidence ladder (why it wasn't proven).
+    const reason =
+        verdict === 'SUSPECTED'
+            ? 'error signal only; computational and boolean oracles did not reproduce an effect'
+            : verdict === 'REJECTED'
+                ? 'no oracle reproduced any injection effect at this point'
+                : undefined;
+
+    return { finding, verdict, techniques, severity, evidence, llm: null, agreement: 'n/a', note, reason };
 }

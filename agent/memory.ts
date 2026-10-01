@@ -1,8 +1,10 @@
 import type { DiscoveredForm } from './tools/discover';
+import type { ValidationResult } from './validator/types';
 
 export class Memory {
     engine: string | null = null;
     forms: DiscoveredForm[] = [];
+    findings: ValidationResult[] = [];
     private tried = new Map<string, string>(); // request key -> outcome digest
     notes: string[] = [];
 
@@ -27,6 +29,15 @@ export class Memory {
         }
     }
 
+    findingFor(path: string, method: string, field: string): ValidationResult | undefined {
+        return this.findings.find(
+            (f) => f.finding.path === path && f.finding.method === method && f.finding.field === field,
+        );
+    }
+    addFinding(r: ValidationResult): void {
+        this.findings.push(r);
+    }
+
     triedList(): string {
         const rows = [...this.tried.entries()].map(([k, v]) => `  ${k}\n     -> ${v}`);
         return rows.length ? rows.join('\n') : '(none)';
@@ -36,6 +47,9 @@ export class Memory {
             `DB engine: ${this.engine ?? 'unknown'}`,
             this.forms.length ? `Forms mapped: ${JSON.stringify(this.forms)}` : 'Forms mapped: none yet',
             `Distinct requests tried: ${this.tried.size}`,
+            this.findings.length
+                ? `Findings so far: ${this.findings.map((f) => `${f.verdict} ${f.finding.method} ${f.finding.path}#${f.finding.field}`).join('; ')}`
+                : '',
             this.notes.length ? `Notes: ${this.notes.join('; ')}` : '',
         ].filter(Boolean).join('\n');
     }

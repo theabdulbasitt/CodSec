@@ -53,6 +53,11 @@ Other injection/vulnerability classes (XSS, SSRF, auth bypass, …) are **not pe
 scope** — the architecture is meant to generalise to them, and they are a planned extension
 once SQLi is solid. They are simply not built yet.
 
+Hard cuts (these stay out):
+- ❌ Attacking anything not owned and run locally.
+- ❌ Fixing/patching code (find and prove, not remediate).
+- ❌ Reading the target's source (black-box only).
+
 ## Absolute safety boundary
 Offensive tooling that sends real payloads. The agent attacks ONLY localhost / 127.0.0.1
 targets on an explicit allow-list, and REFUSES any other host. Attacking systems you don't

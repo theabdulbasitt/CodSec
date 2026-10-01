@@ -35,4 +35,5 @@ export interface ValidationResult {
     llm: LlmOpinion | null;       // ADVISORY only
     agreement: 'agree' | 'disagree' | 'n/a';
     note: string;
+    reason?: string;              // why it wasn't PROVEN (for SUSPECTED/REJECTED escalation)
 }
