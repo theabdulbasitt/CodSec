@@ -36,4 +36,5 @@ export interface ValidationResult {
     agreement: 'agree' | 'disagree' | 'n/a';
     note: string;
     reason?: string;              // why it wasn't PROVEN (for SUSPECTED/REJECTED escalation)
+    hunter?: { why: string; how: string[] };  // deep-mode: LLM reasoning (why) + action trace (how)
 }

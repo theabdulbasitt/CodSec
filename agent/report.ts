@@ -1,7 +1,7 @@
 import type { ValidationResult } from './validator/types';
 
 export function formatReport(findings: ValidationResult[]): string {
-    if (!findings.length) return 'No findings were reported by the hunter.';
+    if (!findings.length) return 'No findings.';
 
     const proven = findings.filter((f) => f.verdict === 'PROVEN');
     const suspected = findings.filter((f) => f.verdict === 'SUSPECTED');
@@ -15,17 +15,21 @@ export function formatReport(findings: ValidationResult[]): string {
         out.push(`  techniques: ${f.techniques.join(', ') || 'none'}`);
         for (const e of f.evidence.filter((e) => e.passed)) {
             out.push(`  ✓ ${e.oracle}: ${e.actualSnippet}`);
-            if (e.oracle === 'computational') out.push(`     request: ${f.finding.field} = ${e.request}`);
+            if (e.oracle.startsWith('computational')) out.push(`     request: ${f.finding.field} = ${e.request}`);
         }
-        if (f.reason) out.push(`  reason: ${f.reason}`);
+        if (f.note) out.push(`  → ${f.note}`);
+        if (f.hunter) {
+            out.push(`  why:  ${f.hunter.why || '—'}`);
+            if (f.hunter.how.length) {
+                out.push(`  how:`);
+                for (const step of f.hunter.how) out.push(`     - ${step}`);
+            }
+        }
         out.push('');
     }
-
     if (rejected.length) {
-        out.push('Rejected (hunter claimed, validator disproved):');
-        for (const f of rejected) {
-            out.push(`  ✗ ${f.finding.method} ${f.finding.path} (field: ${f.finding.field})`);
-        }
+        out.push('Rejected (no injection effect reproduced):');
+        for (const f of rejected) out.push(`  ✗ ${f.finding.method} ${f.finding.path} (field: ${f.finding.field})`);
     }
     return out.join('\n');
 }

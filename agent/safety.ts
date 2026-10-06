@@ -24,3 +24,20 @@ export function assertAllowedUrl(rawUrl: string): URL {
 
     return url;
 }
+
+// Non-destructive guard — the second check at the egress chokepoint. Offensive PROOF
+// never needs to mutate data, so no tool (present or future) may send DDL/DML or a
+// stacked query (;). Enforced in code, not the prompt: the LLM can't be talked past it.
+const DESTRUCTIVE = /\b(drop|delete|insert|update|alter|truncate|create|replace|grant|revoke|attach|detach|pragma|vacuum)\b|;/i;
+
+export function assertNonDestructive(values: Iterable<string>): void {
+    for (const v of values) {
+        if (typeof v === 'string' && DESTRUCTIVE.test(v)) {
+            throw new Error(
+                `Refusing request: payload contains a destructive or stacked statement ` +
+                `("${v.slice(0, 60)}"). CodSec proves injection with read-only payloads ` +
+                `only (UNION / boolean / time-based).`,
+            );
+        }
+    }
+}

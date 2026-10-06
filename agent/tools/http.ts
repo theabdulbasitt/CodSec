@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { assertAllowedUrl } from '../safety';
+import { assertAllowedUrl, assertNonDestructive } from '../safety';
 
 export interface HttpRequestArgs {
     method?: 'GET' | 'POST';
@@ -29,7 +29,8 @@ export async function httpRequest(args: HttpRequestArgs): Promise<HttpResult> {
         url.searchParams.set(k, v);
     }
 
-    assertAllowedUrl(url.href);         // ← the wall, before anything is sent
+    assertAllowedUrl(url.href);         // ← wall 1: allowed host?
+    assertNonDestructive([...Object.values(args.query ?? {}), ...Object.values(args.form ?? {})]); // ← wall 2: non-destructive payload?
 
     const headers: Record<string, string> = { ...args.headers };
     const init: RequestInit = { method, headers };

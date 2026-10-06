@@ -12,6 +12,8 @@ db.exec(`
   CREATE TABLE secrets (id INTEGER PRIMARY KEY, flag TEXT);
   INSERT INTO users (username, password) VALUES ('alice', 'wonderland'), ('bob', 'builder');
   INSERT INTO secrets (flag) VALUES ('${FLAG}');
+  CREATE TABLE accounts (id INTEGER PRIMARY KEY, username TEXT, email TEXT);
+  INSERT INTO accounts (username, email) VALUES ('alice', 'alice@acme.test'), ('bob', 'bob@acme.test');
 `);
 
 const app = express();
@@ -27,13 +29,14 @@ const nav = `
   <a href="/products">Catalog</a> |
   <a href="/feedback">Contact Us</a> |
   <a href="/about">About</a> |
+  <a href="/account?id=1">My Account</a> |
   <a href="/admin">Admin Portal</a>
 </nav>
 `;
 
 // Home Page
 app.get('/', (_req, res) => {
-    res.type('html').send(`<!doctype html>
+  res.type('html').send(`<!doctype html>
 <meta charset="utf-8"><title>Acme Corp — Internal Portal</title>
 ${nav}
 <h1>Acme Corporation Internal Systems</h1>
@@ -46,9 +49,25 @@ ${nav}
 </ul>`);
 });
 
+// Account lookup — NUMERIC-context SQLi (no quotes around id). Intentionally
+// vulnerable. Defeats string-context oracles → should land SUSPECTED.
+app.get('/account', (req, res) => {
+  const id = req.query.id ?? '1';
+  const sql = `SELECT username, email FROM accounts WHERE id = ${id}`;
+  try {
+    const row = db.prepare(sql).get();
+    if (row) {
+      return res.type('html').send(`${nav}<h1>Account</h1><p>User: ${row.username} (${row.email})</p>`);
+    }
+    return res.status(404).type('html').send(`${nav}<p>No account found.</p>`);
+  } catch (err) {
+    return res.status(500).type('html').send(`${nav}<pre>DB error: ${err.message}</pre>`);
+  }
+});
+
 // Login Page (GET) & Handler (POST) - Vulnerable to SQLi
 app.get('/login', (_req, res) => {
-    res.type('html').send(`<!doctype html>
+  res.type('html').send(`<!doctype html>
 <meta charset="utf-8"><title>Acme Login</title>
 ${nav}
 <h1>Acme Internal — Sign in</h1>
@@ -60,28 +79,28 @@ ${nav}
 });
 
 app.post('/login', (req, res) => {
-    const username = req.body.username ?? '';
-    const password = req.body.password ?? '';
+  const username = req.body.username ?? '';
+  const password = req.body.password ?? '';
 
-    const sql =
-        `SELECT id, username FROM users ` +
-        `WHERE username = '${username}' AND password = '${password}'`;
+  const sql =
+    `SELECT id, username FROM users ` +
+    `WHERE username = '${username}' AND password = '${password}'`;
 
-    try {
-        const row = db.prepare(sql).get();
-        if (row) {
-            return res.type('html').send(`${nav}<p>Welcome back, ${row.username}!</p>`);
-        }
-        return res.status(401).type('html').send(`${nav}<p>Invalid credentials.</p>`);
-    } catch (err) {
-        return res.status(500).type('html').send(`${nav}<pre>DB error: ${err.message}</pre>`);
+  try {
+    const row = db.prepare(sql).get();
+    if (row) {
+      return res.type('html').send(`${nav}<p>Welcome back, ${row.username}!</p>`);
     }
+    return res.status(401).type('html').send(`${nav}<p>Invalid credentials.</p>`);
+  } catch (err) {
+    return res.status(500).type('html').send(`${nav}<pre>DB error: ${err.message}</pre>`);
+  }
 });
 
 // Search Page & Endpoint (GET with query params)
 app.get('/search', (req, res) => {
-    const q = req.query.q ? String(req.query.q) : '';
-    res.type('html').send(`<!doctype html>
+  const q = req.query.q ? String(req.query.q) : '';
+  res.type('html').send(`<!doctype html>
 <meta charset="utf-8"><title>Search Catalog</title>
 ${nav}
 <h1>Search Products</h1>
@@ -95,8 +114,8 @@ ${q ? `<p>Results for "<strong>${q}</strong>": No items found matching this quer
 
 // Product Catalog
 app.get('/products', (req, res) => {
-    const category = req.query.category ?? 'all';
-    res.type('html').send(`<!doctype html>
+  const category = req.query.category ?? 'all';
+  res.type('html').send(`<!doctype html>
 <meta charset="utf-8"><title>Product Catalog</title>
 ${nav}
 <h1>Catalog (Category: ${category})</h1>
@@ -111,7 +130,7 @@ ${nav}
 
 // Feedback / Contact Form (POST)
 app.get('/feedback', (_req, res) => {
-    res.type('html').send(`<!doctype html>
+  res.type('html').send(`<!doctype html>
 <meta charset="utf-8"><title>Customer Feedback</title>
 ${nav}
 <h1>Send Us Feedback</h1>
@@ -124,8 +143,8 @@ ${nav}
 });
 
 app.post('/feedback', (req, res) => {
-    const email = req.body.email ?? '';
-    res.type('html').send(`<!doctype html>
+  const email = req.body.email ?? '';
+  res.type('html').send(`<!doctype html>
 <meta charset="utf-8"><title>Feedback Received</title>
 ${nav}
 <h1>Thank You</h1>
@@ -136,7 +155,7 @@ ${nav}
 
 // Static Info Page
 app.get('/about', (_req, res) => {
-    res.type('html').send(`<!doctype html>
+  res.type('html').send(`<!doctype html>
 <meta charset="utf-8"><title>About Acme</title>
 ${nav}
 <h1>About Acme Corporation</h1>
@@ -147,7 +166,7 @@ ${nav}
 
 // Protected / Admin Page
 app.get('/admin', (_req, res) => {
-    res.status(403).type('html').send(`<!doctype html>
+  res.status(403).type('html').send(`<!doctype html>
 <meta charset="utf-8"><title>Admin Portal</title>
 ${nav}
 <h1>403 Forbidden</h1>
